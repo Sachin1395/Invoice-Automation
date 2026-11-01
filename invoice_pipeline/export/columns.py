@@ -1,0 +1,76 @@
+"""Column layout shared by the Excel sheets and the CSV files, so every format says the same thing.
+kind: text | wrap | int | num | money | date | score"""
+
+INVOICE_COLUMNS = [
+    ("invoice_id", "Invoice ID", "int"),
+    ("invoice_number", "Invoice number", "text"),
+    ("invoice_date", "Invoice date", "date"),
+    ("seller_name", "Seller", "text"),
+    ("seller_gstin", "Seller GSTIN", "text"),
+    ("buyer_name", "Buyer", "text"),
+    ("place_of_supply", "Place of supply", "text"),
+    ("order_number", "Order number", "text"),
+    ("document_type", "Document type", "text"),
+    ("currency", "Currency", "text"),
+    ("taxable_value", "Taxable value", "money"),
+    ("cgst", "CGST", "money"),
+    ("sgst_utgst", "SGST/UTGST", "money"),
+    ("igst", "IGST", "money"),
+    ("cess", "Cess", "money"),
+    ("total_tax", "Total tax", "money"),
+    ("invoice_total", "Invoice total", "money"),
+    ("payment_mode", "Payment mode", "text"),
+    ("payment_ref", "Payment reference", "text"),
+    ("approval", "Approval", "text"),
+    ("score", "Confidence", "score"),
+    ("source_file", "Source file", "text"),
+    ("reviewer_note", "Reviewer note", "wrap"),
+]
+
+LINE_COLUMNS = [
+    ("invoice_id", "Invoice ID", "int"),
+    ("invoice_number", "Invoice number", "text"),
+    ("invoice_date", "Invoice date", "date"),
+    ("seller_name", "Seller", "text"),
+    ("line", "Line", "int"),
+    ("description", "Description", "wrap"),
+    ("hsn_sac", "HSN/SAC", "text"),
+    ("quantity", "Quantity", "num"),
+    ("unit_price", "Unit price", "money"),
+    ("gross_amount", "Gross amount", "money"),
+    ("discount", "Discount", "money"),
+    ("taxable_value", "Taxable value", "money"),
+    ("tax_rate", "Tax rate %", "num"),
+    ("cgst", "CGST", "money"),
+    ("sgst_utgst", "SGST/UTGST", "money"),
+    ("igst", "IGST", "money"),
+    ("cess", "Cess", "money"),
+    ("line_total", "Line total", "money"),
+]
+
+REVIEW_COLUMNS = [
+    ("review_id", "Review ID", "int"),
+    ("invoice_id", "Invoice ID", "int"),
+    ("invoice_number", "Invoice number", "text"),
+    ("seller_name", "Seller", "text"),
+    ("invoice_total", "Invoice total", "money"),
+    ("currency", "Currency", "text"),
+    ("score", "Confidence", "score"),
+    ("reasons", "Why it needs review", "wrap"),
+    ("source_file", "Source file", "text"),
+    ("created_at", "Queued at", "text"),
+]
+
+REJECTED_COLUMNS = [
+    ("kind", "Type", "text"),
+    ("invoice_id", "Invoice ID", "int"),
+    ("invoice_number", "Invoice number / file", "text"),
+    ("seller_name", "Seller", "text"),
+    ("invoice_total", "Invoice total", "money"),
+    ("currency", "Currency", "text"),
+    ("reason", "Reason", "wrap"),
+    ("duplicate_of", "Duplicate of", "text"),
+    ("decided_by", "Decided by", "text"),
+    ("source_file", "Source file", "text"),
+    ("when", "When", "text"),
+]

@@ -1,0 +1,17 @@
+# Render Blueprint: New + > Blueprint, pick this repo. Free plan, one instance (sessions live in memory).
+services:
+  - type: web
+    name: invoice-processing-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m invoice_pipeline.web
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false                        # you paste it in the dashboard; never commit it
+      - key: DEMO_MAX_FILES_PER_IP_PER_HOUR
+        value: "10"
+      - key: DEMO_MAX_FILES_PER_DAY
+        value: "150"
