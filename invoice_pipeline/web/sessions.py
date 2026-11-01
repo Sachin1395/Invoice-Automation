@@ -53,6 +53,8 @@ class Session:
     log: list = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
     t0: float = field(default_factory=time.time)
+    visitor: str = ""
+    src: str = ""
 
     def add_event(self, e: dict) -> None:
         with self.lock:
@@ -67,7 +69,8 @@ class Session:
 
 class SessionManager:
     def __init__(self, base: Settings, root: Path, llm: Optional[LLMClient] = None,
-                 ttl_s: float = 2 * 3600, synchronous: bool = False):
+                 ttl_s: float = 2 * 3600, synchronous: bool = False, tracker=None):
+        self.tracker = tracker
         self.base, self.root, self.llm, self.ttl_s = base, Path(root), llm, ttl_s
         self.synchronous = synchronous          # tests: run in the calling thread
         self.sessions: dict[str, Session] = {}
@@ -76,7 +79,7 @@ class SessionManager:
         self.purge_stale()
 
     # --- lifecycle -----------------------------------------------------------
-    def create(self, uploads: list[tuple[str, bytes]]) -> Session:
+    def create(self, uploads: list[tuple[str, bytes]], visitor: str = "", src: str = "") -> Session:
         self.purge_stale()
         sid = uuid.uuid4().hex[:16]
         d = self.root / sid
@@ -89,7 +92,7 @@ class SessionManager:
             path = s.inbox_dir / clean_name(name, taken)
             path.write_bytes(data)
             os.utime(path, (now + i, now + i))      # the run takes files oldest first = upload order
-        sess = Session(id=sid, root=d, settings=s, total=len(uploads))
+        sess = Session(id=sid, root=d, settings=s, total=len(uploads), visitor=visitor, src=src)
         self.sessions[sid] = sess
         if self.synchronous:
             self._run(sess)
@@ -130,6 +133,8 @@ class SessionManager:
                 sess.status, sess.t0 = "running", time.time()
                 run_once(sess.settings, llm=self.llm)
                 sess.status = "done"
+                if self.tracker:
+                    self.tracker.track("completed", sess.visitor, sess.src, sess.id)
             finally:
                 self._run_slot.release()
         except FatalLLMError as exc:

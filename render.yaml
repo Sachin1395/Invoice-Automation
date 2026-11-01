@@ -15,3 +15,7 @@ services:
         value: "10"
       - key: DEMO_MAX_FILES_PER_DAY
         value: "150"
+      - key: ANALYTICS_WEBHOOK_URL
+        sync: false                        # Google Apps Script web app URL (leave empty = analytics off)
+      - key: ANALYTICS_SECRET
+        sync: false

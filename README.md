@@ -112,3 +112,14 @@ Notes
 - Free plan sleeps after ~15 min idle (first visit then takes about a minute) and its disk is wiped on every restart; sessions are in memory, so run exactly one instance.
 - Demo limits (env vars, `0` disables): `DEMO_MAX_FILES_PER_IP_PER_HOUR` (default 10), `DEMO_MAX_FILES_PER_DAY` (default 150, all visitors). Over the limit the API returns 429 with a readable message.
 - The free Gemini tier may use submitted data for training: keep the "no sensitive documents" notice.
+
+
+## Anonymous usage analytics (optional)
+
+Counts four events, `opened`, `started`, `completed`, `downloaded`, with a random browser id and the `?src=` tag
+(e.g. `https://your-app.onrender.com/?src=fiverr`). No IP address, file name, file content or email is sent. Visits with `?src=me` are ignored.
+
+1. Create a Google Sheet; rename the first tab to `Events`; row 1: `time, event, visitor, src, session`.
+2. Extensions > Apps Script: paste `docs/analytics_apps_script.gs`, set `SECRET`, then Deploy > New deployment > Web app (Execute as: Me, Access: Anyone). Copy the URL.
+3. In Render, set `ANALYTICS_WEBHOOK_URL` (that URL) and `ANALYTICS_SECRET` (the same secret). Redeploy.
+4. Unset = analytics off. Sending is on a background thread and can never slow down or break a request.

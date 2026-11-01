@@ -287,3 +287,39 @@ def test_limits_can_be_switched_off():
     from invoice_pipeline.web.limits import DemoLimits
     off = DemoLimits(per_ip_per_hour=0, per_day=0)
     assert all(off.take("ip", 5) is None for _ in range(50))
+
+
+def test_analytics_events_in_order_and_no_personal_data(web_settings, tmp_path):
+    from invoice_pipeline.web.analytics import Tracker
+    sent = []
+    tr = Tracker("https://example.test/hook", "s3cret", sender=lambda url, row: sent.append(row))
+    app = create_app(web_settings, llm=FakeLLM({"*": [reply([good()])]}), sessions_root=tmp_path / "s",
+                     synchronous=True, limits=None or __import__("invoice_pipeline.web.limits", fromlist=["x"]).DemoLimits(0, 0),
+                     tracker=tr)
+    c = TestClient(app)
+    assert c.post("/api/track", json={"visitor": "v1", "src": "fiverr"}).status_code == 204
+    r = c.post("/api/sessions", files=[("files", ("secret-name.pdf", pdf_for([good()]), "application/pdf"))],
+               data={"visitor": "v1", "src": "fiverr"})
+    sid = r.json()["id"]
+    assert c.get(f"/api/sessions/{sid}/download/csv").status_code == 200
+    tr.flush()
+    assert [row["event"] for row in sent] == ["opened", "started", "completed", "downloaded"]
+    assert all(row["visitor"] == "v1" and row["src"] == "fiverr" and row["secret"] == "s3cret" for row in sent)
+    assert "secret-name" not in str(sent)               # no file names or contents
+
+
+def test_analytics_off_ignores_me_and_survives_failures():
+    from invoice_pipeline.web.analytics import Tracker
+    assert Tracker("").track("opened", "v") is False                       # not configured
+    sent = []
+    tr = Tracker("https://x", "k", sender=lambda u, r: sent.append(r))
+    assert tr.track("opened", "v", "me") is False                          # your own visits
+    assert tr.track("hacked", "v", "fiverr") is False                      # unknown event
+    assert tr.track("opened", "v<script>", "a b") is True
+    tr.flush()
+    assert sent[0]["visitor"] == "vscript" and sent[0]["src"] == "ab"      # sanitised
+    def boom(u, r): raise RuntimeError("down")
+    bad = Tracker("https://x", "k", sender=boom)
+    assert bad.track("opened", "v") is True
+    bad.flush()                                                            # failure is swallowed
+    assert bad.track("opened", "v") is True

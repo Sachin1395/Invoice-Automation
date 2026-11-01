@@ -262,7 +262,7 @@ footer{border-top:1px solid var(--line);padding:28px 24px;text-align:center;colo
   </div>
 </section>
 </main>
-<footer>Invoice Processing Agent</footer>
+<footer>Invoice Processing Agent · anonymous usage counts only, no personal data</footer>
 
 
 <script>
@@ -274,6 +274,11 @@ const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_FILES = 5, API = "/api/sessions";
 let sid = null;
+/* anonymous usage counts: a random id kept in this browser plus the ?src= tag, no personal data */
+const SRC = (new URLSearchParams(location.search).get("src") || "").slice(0, 40);
+let VID = "";
+try { VID = localStorage.getItem("ipa_vid") || ""; if (!VID) { VID = Math.random().toString(36).slice(2, 12) + Date.now().toString(36); localStorage.setItem("ipa_vid", VID); } } catch (e) {}
+fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitor: VID, src: SRC }), keepalive: true }).catch(() => {});
 async function api(url, opts) {
   let r;
   try { r = await fetch(url, opts); } catch (e) { throw new Error("network_error: the server could not be reached"); }
@@ -281,7 +286,7 @@ async function api(url, opts) {
   return r.json();
 }
 async function runPipeline(list, onLog, isActive) {
-  const fd = new FormData(); list.forEach(f => fd.append("files", f, f.name));
+  const fd = new FormData(); list.forEach(f => fd.append("files", f, f.name)); fd.append("visitor", VID); fd.append("src", SRC);
   sid = (await api(API, { method: "POST", body: fd })).id;
   let after = 0, misses = 0;
   for (;;) {

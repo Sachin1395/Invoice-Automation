@@ -6,6 +6,7 @@
     POST   /api/sessions/{id}/review/{rid}    {"action": "approve" | "reject", "note"?}  -> result
     GET    /api/sessions/{id}/download/{fmt}  csv | lines | xlsx | json
     DELETE /api/sessions/{id}                 delete the session's files
+    POST   /api/track                         {visitor, src}: anonymous 'opened' count (see analytics.py)
 """
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -22,6 +23,7 @@ from ..config import PROJECT_ROOT, Settings, get_settings
 from ..export import export_all
 from ..export.exporter import FILES
 from ..llm.client import LLMClient
+from .analytics import Tracker, clean
 from .limits import DemoLimits
 from .results import build_result
 from .sessions import MAX_FILES, SessionManager
@@ -33,6 +35,11 @@ DOWNLOADS = {"csv": ("invoices_csv", "text/csv"), "lines": ("lines_csv", "text/c
              "json": ("json", "application/json")}
 
 
+class Hit(BaseModel):
+    visitor: str = ""
+    src: str = ""
+
+
 class ReviewBody(BaseModel):
     action: str
     note: Optional[str] = None
@@ -40,11 +47,12 @@ class ReviewBody(BaseModel):
 
 def create_app(base: Optional[Settings] = None, llm: Optional[LLMClient] = None,
                sessions_root: Optional[Path] = None, synchronous: bool = False, ttl_s: float = 2 * 3600,
-               limits: Optional[DemoLimits] = None) -> FastAPI:
+               limits: Optional[DemoLimits] = None, tracker: Optional[Tracker] = None) -> FastAPI:
     base = base or get_settings()
     limits = limits if limits is not None else DemoLimits.from_env()
+    tracker = tracker if tracker is not None else Tracker.from_env()
     mgr = SessionManager(base, sessions_root or PROJECT_ROOT / "sessions", llm=llm, ttl_s=ttl_s,
-                         synchronous=synchronous)
+                         synchronous=synchronous, tracker=tracker)
     app = FastAPI(title="Invoice Processing Agent", docs_url=None, redoc_url=None)
     app.state.sessions = mgr
 
@@ -68,8 +76,13 @@ def create_app(base: Optional[Settings] = None, llm: Optional[LLMClient] = None,
     def health():
         return {"ok": True}
 
+    @app.post("/api/track", status_code=204)
+    def track(hit: Hit):
+        tracker.track("opened", hit.visitor, hit.src)
+
     @app.post("/api/sessions")
-    async def create_session(request: Request, files: list[UploadFile] = File(...)):
+    async def create_session(request: Request, files: list[UploadFile] = File(...),
+                             visitor: str = Form(""), src: str = Form("")):
         if not files:
             raise HTTPException(400, "Choose at least one file.")
         if len(files) > MAX_FILES:
@@ -85,7 +98,9 @@ def create_app(base: Optional[Settings] = None, llm: Optional[LLMClient] = None,
         refused = limits.take(fwd or (request.client.host if request.client else "?"), len(uploads))
         if refused:
             raise HTTPException(429, refused)
-        sess = mgr.create(uploads)
+        visitor, src = clean(visitor), clean(src)
+        tracker.track("started", visitor, src, "")
+        sess = mgr.create(uploads, visitor, src)
         return {"id": sess.id, "total": sess.total}
 
     @app.get("/api/sessions/{sid}")
@@ -123,6 +138,7 @@ def create_app(base: Optional[Settings] = None, llm: Optional[LLMClient] = None,
         if fmt not in DOWNLOADS:
             raise HTTPException(404, "Unknown format")
         key, media = DOWNLOADS[fmt]
+        tracker.track("downloaded", s.visitor, s.src, s.id)
         res = export_all(s.settings)               # always current: includes reviewer decisions
         name = FILES[key]
         path = res.paths[list(FILES).index(key)]     # same order as FILES; may carry a fallback name if locked
